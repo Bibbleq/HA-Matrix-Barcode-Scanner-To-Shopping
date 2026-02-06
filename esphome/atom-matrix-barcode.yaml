@@ -44,9 +44,9 @@ logger:
   baud_rate: 0                # Disable UART0 logging (keeps pins free)
 
 api:
-  on_client_connected:
+  on_connect:
     - script.execute: show_ready_status
-  on_client_disconnected:
+  on_disconnect:
     - script.execute: show_connecting_status
 
 ota:
@@ -230,7 +230,7 @@ script:
       - lambda: 'id(ready_status_shown) = false;'
       - while:
           condition:
-            lambda: 'return !id(ready_status_shown);'
+            api.connected: false
           then:
             # Red blink
             - light.turn_on:
