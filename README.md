@@ -28,7 +28,9 @@ A complete Home Assistant integration for scanning barcodes and automatically ad
 
 ### Required Components
 - **M5Stack Atom Matrix** - ESP32-based controller with 5x5 LED matrix
+  - https://www.aliexpress.com/item/1005003299281299.html
 - **M5Stack QR/Barcode Scanner Unit** - Compatible barcode scanner module
+  - https://www.aliexpress.com/item/1005007316111365.html
 
 ### Pin Connections
 The barcode scanner connects to the Atom Matrix via Grove port:
