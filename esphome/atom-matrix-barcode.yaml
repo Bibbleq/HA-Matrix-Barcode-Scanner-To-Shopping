@@ -24,6 +24,8 @@ esphome:
       # Force known idle state on control lines
       - switch.turn_off: scanner_trigger
       - switch.turn_off: scanner_aim
+      # Start connection status monitoring
+      - script.execute: show_connecting_status
 
 # ---------- One-place knobs for behavior (edit here to tune) ----------
 # We expand these everywhere below (including inside lambdas).
@@ -44,10 +46,6 @@ logger:
   baud_rate: 0                # Disable UART0 logging (keeps pins free)
 
 api:
-  on_connect:
-    - script.execute: show_ready_status
-  on_disconnect:
-    - script.execute: show_connecting_status
 
 ota:
   - platform: esphome
@@ -220,6 +218,20 @@ interval:
             }
             buf.clear();
           }
+  
+  # Monitor API connection status and restart connecting status if disconnected
+  - interval: 2s
+    then:
+      - if:
+          condition:
+            not:
+              api.connected: true
+          then:
+            - if:
+                condition:
+                  lambda: 'return id(ready_status_shown) && !id(session_active);'
+                then:
+                  - script.execute: show_connecting_status
 
 # ---------- LED feedback + session scripts ----------
 script:
@@ -252,6 +264,8 @@ script:
             - delay: 500ms
             - light.turn_off: matrix_leds
             - delay: 200ms
+      # When API connects, show ready status
+      - script.execute: show_ready_status
 
   # Show solid green when connected and ready (with timeout)
   - id: show_ready_status
