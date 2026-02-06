@@ -238,6 +238,41 @@ SCAN COMPLETE (within session)
    ▼ (30 seconds no scans)
 
 TIMEOUT → Return to IDLE
+
+   ▼ (60 seconds of inactivity in IDLE)
+
+DEEP SLEEP State
+├─ ESP32 in deep sleep mode
+├─ Power consumption: ~0.05W (95% reduction)
+├─ All peripherals powered down
+└─ Wake on GPIO39 button press
+
+   ▼ (Button press while in deep sleep)
+
+WAKE UP → Boot sequence → Show connection status → Return to IDLE
+```
+
+### Deep Sleep Power Management
+
+```
+Activity Tracking
+├─ last_activity_ms updated on:
+│  ├─ Button press (physical or HA)
+│  ├─ Successful scan
+│  ├─ Connection status showing
+│  └─ Session start/end
+│
+Deep Sleep Conditions
+├─ No active scanning session (session_active = false)
+├─ Not showing ready status (ready_status_shown = false)
+├─ 60 seconds elapsed since last activity
+└─ Checked every 5 seconds by interval component
+│
+Deep Sleep Exit
+├─ Button press on GPIO39 triggers hardware wake
+├─ ESP32 performs full boot sequence
+├─ Initializes scanner and WiFi
+└─ Shows red/yellow connection status, then green ready
 ```
 
 ### Cooldown Mechanism
@@ -295,9 +330,11 @@ Re-arm Delays
 - AI fallback: ~2KB per request
 
 ### Power Consumption
-- Idle: ~0.5W
+- Deep sleep: ~0.05W (after 60 seconds of inactivity)
+- Idle (awake): ~0.8W
 - Scanning: ~1.0W
 - LED flash: ~1.25W (brief)
+- Power savings: 90-95% reduction when in deep sleep mode
 
 ### Memory Usage
 - ESP32: ~40KB RAM for code + buffers

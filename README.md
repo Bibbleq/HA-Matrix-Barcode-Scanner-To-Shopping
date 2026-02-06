@@ -8,6 +8,10 @@ A complete Home Assistant integration for scanning barcodes and automatically ad
 ## 🎯 Features
 
 - **Physical barcode scanner** built with M5Stack Atom Matrix and barcode scanner module
+- **Deep sleep mode** - Reduces idle power consumption from ~0.8W to ~0.05W (90-95% reduction)
+  - Automatically enters deep sleep after 60 seconds of inactivity
+  - Wakes instantly on button press
+  - Full functionality restored after wake
 - **Connection status indicator** - Visual feedback on LED matrix:
   - Red/yellow blinking: Waiting for Home Assistant connection
   - Solid green (30s): Connected and ready to scan
@@ -22,7 +26,6 @@ A complete Home Assistant integration for scanning barcodes and automatically ad
 - **AI-powered fallback** using OpenAI to identify unknown products
 - **Voice feedback** via TTS when items are added
 - **Duplicate detection** with configurable cooldown periods
-- **Low power consumption** with auto-sleep mode
 
 ## 📋 Hardware Requirements
 
@@ -132,6 +135,13 @@ When the device powers on or is unplugged and reconnected:
 
 3. **Idle (LEDs off)** - Normal standby state
    - Ready to start a scan session when button is pressed
+   - After 60 seconds of inactivity, device enters deep sleep mode
+
+4. **Deep Sleep (power saving)** - Ultra-low power mode
+   - Automatically enters after 60 seconds of complete inactivity
+   - Power consumption drops from ~0.8W to ~0.05W (95% reduction)
+   - Press button to wake instantly
+   - Device goes through startup sequence when waking (red/yellow → green)
 
 ### Starting a Scan Session
 
@@ -190,6 +200,7 @@ substitutions:
   rearm_block_ms: "1500"      # Re-arm delay after duplicate/blocked
   session_timeout_ms: "30000" # Session timeout (30 seconds)
   ready_timeout_ms: "30000"   # Ready indicator timeout (30 seconds)
+  deep_sleep_timeout_ms: "60000" # Deep sleep timeout (60 seconds of inactivity)
 ```
 
 ### Scanner Hardware Configuration
