@@ -1,0 +1,256 @@
+alias: Barcode → AnyList (cascade + AI fallback)
+description: >-
+  Lookup barcode across OFF/OBF/OPF, UPC; if all fail, ask OpenAI Conversation
+  to web-search; add to AnyList
+triggers:
+  - entity_id: sensor.atom_matrix_barcode_scanned_code
+    to: null
+    trigger: state
+conditions:
+  - condition: template
+    value_template: "{{ trigger.to_state.state not in ['unknown','unavailable',''] }}"
+  - condition: template
+    value_template: "{{ (trigger.to_state.state | string) | length >= 6 }}"
+actions:
+  - data:
+      barcode: "{{ scanned_code }}"
+    response_variable: off_resp
+    action: rest_command.off_lookup_product
+    continue_on_error: true
+  - variables:
+      _off: >-
+        {% set c = off_resp.get('content', {}) %} {% if c is string %}{{ c |
+        from_json }}{% else %}{{ c }}{% endif %}
+      _off_ok: "{{ (_off.get('status', 0) | int) == 1 }}"
+      _off_product: "{{ _off.get('product', {}) }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ not _off_ok }}"
+        sequence:
+          - data:
+              barcode: "{{ scanned_code }}"
+            response_variable: obf_resp
+            action: rest_command.obf_lookup_product
+            continue_on_error: true
+          - variables:
+              _obf: >-
+                {% set c = obf_resp.get('content', {}) %} {% if c is string %}{{
+                c | from_json }}{% else %}{{ c }}{% endif %}
+              _obf_ok: "{{ (_obf.get('status', 0) | int) == 1 }}"
+              _obf_product: "{{ _obf.get('product', {}) }}"
+    default: []
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ not (_off_ok or (_obf_ok|default(false))) }}"
+        sequence:
+          - data:
+              barcode: "{{ scanned_code }}"
+            response_variable: opf_resp
+            action: rest_command.opf_lookup_product
+            continue_on_error: true
+          - variables:
+              _opf: >-
+                {% set c = opf_resp.get('content', {}) %} {% if c is string %}{{
+                c | from_json }}{% else %}{{ c }}{% endif %}
+              _opf_ok: "{{ (_opf.get('status', 0) | int) == 1 }}"
+              _opf_product: "{{ _opf.get('product', {}) }}"
+    default: []
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ not (_off_ok or (_obf_ok|default(false)) or
+              (_opf_ok|default(false))) }}
+        sequence:
+          - data:
+              barcode: "{{ scanned_code }}"
+            response_variable: upc_resp
+            action: rest_command.upcitemdb_lookup
+            continue_on_error: true
+          - variables:
+              _upc: >-
+                {% set c = upc_resp.get('content', {}) %} {% if c is string %}{{
+                c | from_json }}{% else %}{{ c }}{% endif %}
+              _upc_ok: >-
+                {{ (_upc.get('code','') | lower) == 'ok' and
+                (_upc.get('items',[]) | count) > 0 }}
+              _upc_item: "{{ _upc.get('items',[{}])[0] }}"
+    default: []
+  - variables:
+      product: >-
+        {% if _off_ok %}{{ _off_product }} {% elif _obf_ok|default(false) %}{{
+        _obf_product }} {% elif _opf_ok|default(false) %}{{ _opf_product }} {%
+        elif _upc_ok|default(false) %}{{ _upc_item }} {% else %}{{ dict() }}{%
+        endif %}
+      candidate_name: |-
+        {% if product.get('generic_name') %}
+          {{ product.get('generic_name') }}
+        {% elif product.get('product_name') %}
+          {{ product.get('product_name') }}
+        {% elif product.get('title') %}
+          {{ product.get('title') }}
+        {% else %}
+          Unknown item ({{ scanned_code }})
+        {% endif %}
+      brand: >-
+        {% if product.get('brands') %}{{ product.get('brands') }} {% elif
+        product.get('brand') %}{{ product.get('brand') }} {% else %}{% endif %}
+      any_source_ok: >-
+        {{ _off_ok or (_obf_ok|default(false)) or (_opf_ok|default(false)) or
+        (_upc_ok|default(false)) }}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ not any_source_ok }}"
+        sequence:
+          - response_variable: ai_resp
+            data:
+              agent_id: conversation.openai_conversation
+              text: >-
+                You are helping build a shopping list from barcodes for UK or
+                United Kingdom products.
+
+                Search the web if needed and identify the product from this EAN:
+                {{ scanned_code }}.
+
+                Return only a short label for a shopping list, in the format:
+                "<type>, <brand>, <1–2 word descriptor>".
+
+                Examples:
+
+                "toothpaste, Oral-B, fresh"
+
+                "deodorant, Dove, eucalyptus"
+
+                "milk, Yeo Valley, semi-skimmed"
+
+                Do not include size, usage instructions, benefits, links, or
+                anything else.
+
+                If you are not confident, return exactly this phrase and nothing
+                else: unknown item
+            action: conversation.process
+            enabled: true
+            continue_on_error: true
+          - action: ai_task.generate_data
+            metadata: {}
+            data:
+              task_name: Find unknown item from EAN
+              instructions: >-
+                You are helping build a shopping list from barcodes for UK or
+                United Kingdom products.
+
+                Search the web if needed and identify the product from this EAN:
+                {{ scanned_code }}.
+
+                Return only a short label for a shopping list, in the format:
+                "<type>, <brand>, <1–2 word descriptor>".
+
+                Examples:
+
+                "toothpaste, Oral-B, fresh"
+
+                "deodorant, Dove, eucalyptus"
+
+                "milk, Yeo Valley, semi-skimmed"
+
+                Do not include size, usage instructions, benefits, links, or
+                anything else.
+
+                If you are not confident, return exactly this phrase and nothing
+                else: unknown item
+            response_variable: ai_resp
+            enabled: false
+          - variables:
+              ai_text: >-
+                {% set r = ai_resp.get('response', {}) %} {% if r and
+                r.get('speech', {}).get('plain', {}).get('speech') %}
+                  {{ r.speech.plain.speech | trim }}
+                {% elif ai_resp.get('text') %}
+                  {{ ai_resp.text | trim }}
+                {% else %}{% endif %}
+              final_name: |-
+                {% if ai_text and (ai_text | lower) != 'unknown item' %}
+                  {{ ai_text }}
+                {% else %}
+                  Unknown item ({{ scanned_code }})
+                {% endif %}
+            enabled: true
+          - variables:
+              ai_text: |-
+                {% if ai_resp.get('data') %}
+                  {{ ai_resp.data | trim }}
+                {% else %}
+                  {{ '' }}
+                {% endif %}
+              final_name: |-
+                {% if ai_text and (ai_text | lower) != 'unknown item' %}
+                  {{ ai_text }}
+                {% else %}
+                  Unknown item ({{ scanned_code }})
+                {% endif %}
+            enabled: false
+    default:
+      - action: ai_task.generate_data
+        metadata: {}
+        data:
+          task_name: Find unknow item from EAN
+          instructions: >-
+            You are helping build a shopping list from barcodes for UK or United
+            Kingdom products. A web service has identified the item as follows:
+            {{ candidate_name }}
+
+
+            Return only a short label for a shopping list, in the format:
+            "<type>, <brand>, <1–2 word descriptor>".
+
+            Examples:
+
+            "toothpaste, Oral-B, fresh"
+
+            "deodorant, Dove, eucalyptus"
+
+            "milk, Yeo Valley, semi-skimmed"
+
+            Do not include size, usage instructions, benefits, links, or
+            anything else.
+
+            If you are not confident, return exactly this phrase and nothing
+            else: unknown item
+        response_variable: ai_candidate_name
+        enabled: false
+      - variables:
+          final_name: "{{ candidate_name }}"
+  - data:
+      item: "{{ final_name }}"
+      description: "{% if brand %}{{ brand }} — {% endif %}EAN: {{ scanned_code }}"
+    action: todo.add_item
+    target:
+      entity_id: todo.shopping
+  - action: tts.speak
+    metadata: {}
+    data:
+      cache: true
+      message: "{{ final_name }} added to shopping list"
+      media_player_entity_id: media_player.kitchen_echo
+    target:
+      entity_id:
+        - tts.piper
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >-
+              {{ not any_source_ok and (final_name | lower |
+              regex_match('^unknown item')) }}
+        sequence:
+          - action: notify.notify_ben_mobile
+            metadata: {}
+            data:
+              message: >-
+                Could not identify {{ scanned_code }}. Added placeholder to
+                list.
+mode: single
+variables:
+  scanned_code: "{{ trigger.to_state.state | string }}"
