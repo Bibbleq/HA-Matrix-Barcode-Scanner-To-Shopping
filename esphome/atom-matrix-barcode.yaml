@@ -211,7 +211,7 @@ interval:
 
 # ---------- LED feedback + session scripts ----------
 script:
-  # Gentle green flash for a good read (20% brightness to protect acrylic screen)
+  # Gentle green flash for a good read (70% brightness to protect acrylic screen)
   - id: flash_green
     mode: restart
     then:
