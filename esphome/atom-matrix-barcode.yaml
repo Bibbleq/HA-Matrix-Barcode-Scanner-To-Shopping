@@ -46,13 +46,12 @@ esp32:
 
 # ---------- Deep Sleep Configuration ----------
 # Enables deep sleep mode to reduce idle power from ~0.8W to ~0.05W
-# Wakes on button press (GPIO39) - ext0 wake source
+# Wakes on button press (GPIO39) - ext1 wake source
 deep_sleep:
   id: deep_sleep_control
   esp32_ext1_wakeup:
-    pins:
-      - number: GPIO39
-        mode: ALL_LOW  # Wake when GPIO39 goes LOW (button press)
+    pins: GPIO39
+    mode: ALL_LOW  # Wake when all specified pins are LOW (button press)
 
 logger:
   level: INFO                 # Use DEBUG temporarily if you need to inspect logs
