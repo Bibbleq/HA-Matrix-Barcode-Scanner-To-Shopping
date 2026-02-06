@@ -24,8 +24,12 @@ esphome:
       # Force known idle state on control lines
       - switch.turn_off: scanner_trigger
       - switch.turn_off: scanner_aim
+      # Initialize activity timer for deep sleep
+      - lambda: 'id(last_activity_ms) = millis();'
       # Start connection status monitoring
       - script.execute: show_connecting_status
+      # Start deep sleep watchdog
+      - script.execute: deep_sleep_watchdog
 
 # ---------- One-place knobs for behavior (edit here to tune) ----------
 # We expand these everywhere below (including inside lambdas).
@@ -35,11 +39,20 @@ substitutions:
   rearm_block_ms: "1500"      # After blocked/duplicate, wait a bit longer
   session_timeout_ms: "30000" # End session if no accepted scan for 30s
   ready_timeout_ms: "30000"   # Show green "ready" status for 30s after HA connection
+  deep_sleep_timeout_ms: "60000" # Enter deep sleep after 60s of inactivity
 
 esp32:
   board: m5stack-atom
   framework:
     type: arduino
+
+# ---------- Deep Sleep Configuration ----------
+# Enables deep sleep mode to reduce idle power from ~0.8W to ~0.05W
+# Wakes on button press (GPIO39)
+deep_sleep:
+  id: deep_sleep_control
+  wakeup_pin: GPIO39
+  wakeup_pin_mode: INVERT_WAKEUP  # Wake when pin goes LOW (button press)
 
 logger:
   level: INFO                 # Use DEBUG temporarily if you need to inspect logs
@@ -104,6 +117,7 @@ binary_sensor:
       - delayed_on: 20ms     # simple debounce
       - delayed_off: 20ms
     on_press:
+      - lambda: 'id(last_activity_ms) = millis();'  # Reset deep sleep timer
       - script.stop: show_ready_status        # Stop ready status if showing
       - script.stop: ready_timeout_watchdog   # Stop ready watchdog
       - script.execute: start_scan_session
@@ -136,6 +150,9 @@ globals:
   - id: ready_status_shown        # True while showing green "ready" status
     type: bool
     initial_value: "false"
+  - id: last_activity_ms          # Track last activity for deep sleep timer
+    type: uint32_t
+    initial_value: "0"
 
 # ---------- Publish last code (fires HA event + green flash + re-arm during session) ----------
 text_sensor:
@@ -145,6 +162,8 @@ text_sensor:
     update_interval: never
     on_value:
       then:
+        # Reset deep sleep timer on successful scan
+        - lambda: 'id(last_activity_ms) = millis();'
         # Send an event into Home Assistant with the raw code text
         - homeassistant.event:
             event: esphome.barcode_scanned
@@ -239,6 +258,7 @@ script:
     mode: restart
     then:
       - lambda: 'id(ready_status_shown) = false;'
+      - lambda: 'id(last_activity_ms) = millis();'  # Reset deep sleep timer
       - while:
           condition:
             lambda: 'return !api::global_api_server->is_connected();'
@@ -365,6 +385,27 @@ script:
       - switch.turn_off: scanner_trigger
       - switch.turn_off: scanner_aim
       - lambda: 'id(session_active) = false;'
+      - lambda: 'id(last_activity_ms) = millis();'  # Reset deep sleep timer after session ends
+
+  # Monitor inactivity and enter deep sleep after timeout
+  - id: deep_sleep_watchdog
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: 'return true;'
+          then:
+            - delay: 5s  # Check every 5 seconds
+            - lambda: |-
+                const uint32_t DEEP_SLEEP_TIMEOUT_MS = ${deep_sleep_timeout_ms};
+                const uint32_t now = millis();
+                const bool is_idle = !id(session_active) && !id(ready_status_shown);
+                const bool timeout_reached = (now - id(last_activity_ms) >= DEEP_SLEEP_TIMEOUT_MS);
+                
+                if (is_idle && timeout_reached) {
+                  ESP_LOGI("deep_sleep", "Entering deep sleep after %u ms of inactivity", DEEP_SLEEP_TIMEOUT_MS);
+                  id(deep_sleep_control).begin_sleep();
+                }
 
 # ---------- UI button to start a session ----------
 # Keep as a proper "button" entity; add it to a Tile/Button card in HA for one-tap use.
@@ -372,6 +413,7 @@ button:
   - platform: template
     name: "Start Scan Session"
     on_press:
+      - lambda: 'id(last_activity_ms) = millis();'  # Reset deep sleep timer
       - script.stop: show_ready_status        # Stop ready status if showing
       - script.stop: ready_timeout_watchdog   # Stop ready watchdog
       - script.execute: start_scan_session
