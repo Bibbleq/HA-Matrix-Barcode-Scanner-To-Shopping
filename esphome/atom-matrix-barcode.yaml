@@ -224,8 +224,7 @@ interval:
     then:
       - if:
           condition:
-            not:
-              api.connected: true
+            lambda: 'return !api::global_api_server->is_connected();'
           then:
             - if:
                 condition:
@@ -242,7 +241,7 @@ script:
       - lambda: 'id(ready_status_shown) = false;'
       - while:
           condition:
-            api.connected: false
+            lambda: 'return !api::global_api_server->is_connected();'
           then:
             # Red blink
             - light.turn_on:
