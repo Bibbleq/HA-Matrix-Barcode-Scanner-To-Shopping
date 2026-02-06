@@ -56,16 +56,17 @@ wifi:
   password: !secret wifi_password
 
 # ---------- ATOM Matrix 5x5 LEDs ----------
-# FastLED driver = no RMT deprecation warnings, instant transitions.
+# ESP32 RMT LED Strip driver works with both Arduino and ESP-IDF frameworks.
 # Per M5's guidance, keep short flashes at ~20% to protect the acrylic diffuser/LEDs.
 light:
-  - platform: fastled_clockless
+  - platform: esp32_rmt_led_strip
     id: matrix_leds
     name: "Matrix LEDs"
-    chipset: WS2812B
+    chipset: WS2812
     pin: GPIO27
     num_leds: 25
     rgb_order: GRB
+    rmt_channel: 0
     restore_mode: ALWAYS_OFF
     default_transition_length: 0s  # instant on/off for crisp feedback
 
