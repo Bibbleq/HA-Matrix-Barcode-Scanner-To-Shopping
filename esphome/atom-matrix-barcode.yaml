@@ -24,6 +24,8 @@ esphome:
       # Force known idle state on control lines
       - switch.turn_off: scanner_trigger
       - switch.turn_off: scanner_aim
+      # Initialize activity timer for deep sleep
+      - lambda: 'id(last_activity_ms) = millis();'
       # Start connection status monitoring
       - script.execute: show_connecting_status
 
@@ -35,11 +37,25 @@ substitutions:
   rearm_block_ms: "1500"      # After blocked/duplicate, wait a bit longer
   session_timeout_ms: "30000" # End session if no accepted scan for 30s
   ready_timeout_ms: "30000"   # Show green "ready" status for 30s after HA connection
+  deep_sleep_timeout_ms: "60000" # Enter deep sleep after 60s of inactivity
 
 esp32:
   board: m5stack-atom
   framework:
     type: arduino
+
+# ---------- Deep Sleep Configuration ----------
+# Enables deep sleep mode to reduce idle power from ~0.8W to ~0.05W
+# Device wakes on button press via hardware (GPIO39 button causes reset on Atom Matrix)
+# OR on scheduled wake interval to check for wake conditions
+deep_sleep:
+  id: deep_sleep_control
+  wakeup_pin:
+    number: GPIO39
+    inverted: true
+    mode:
+      input: true
+    allow_other_uses: true  # Allow binary_sensor to also use this pin
 
 logger:
   level: INFO                 # Use DEBUG temporarily if you need to inspect logs
@@ -100,10 +116,12 @@ binary_sensor:
       inverted: true         # press pulls the line low on ATOM Matrix
       mode:
         input: true          # no internal pullup available on GPIO39
+      allow_other_uses: true  # Allow deep_sleep to also use this pin as wakeup
     filters:
       - delayed_on: 20ms     # simple debounce
       - delayed_off: 20ms
     on_press:
+      - lambda: 'id(last_activity_ms) = millis();'  # Reset deep sleep timer
       - script.stop: show_ready_status        # Stop ready status if showing
       - script.stop: ready_timeout_watchdog   # Stop ready watchdog
       - script.execute: start_scan_session
@@ -136,6 +154,9 @@ globals:
   - id: ready_status_shown        # True while showing green "ready" status
     type: bool
     initial_value: "false"
+  - id: last_activity_ms          # Track last activity for deep sleep timer
+    type: uint32_t
+    initial_value: "0"
 
 # ---------- Publish last code (fires HA event + green flash + re-arm during session) ----------
 text_sensor:
@@ -145,6 +166,8 @@ text_sensor:
     update_interval: never
     on_value:
       then:
+        # Reset deep sleep timer on successful scan
+        - lambda: 'id(last_activity_ms) = millis();'
         # Send an event into Home Assistant with the raw code text
         - homeassistant.event:
             event: esphome.barcode_scanned
@@ -232,6 +255,35 @@ interval:
                 then:
                   - script.execute: show_connecting_status
 
+  # Monitor inactivity and enter deep sleep after timeout
+  - interval: 5s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              const uint32_t DEEP_SLEEP_TIMEOUT_MS = ${deep_sleep_timeout_ms};
+              const uint32_t now = millis();
+              const bool is_idle = !id(session_active) && !id(ready_status_shown);
+              
+              // Rollover-safe time difference calculation
+              uint32_t elapsed_ms;
+              if (now >= id(last_activity_ms)) {
+                elapsed_ms = now - id(last_activity_ms);
+              } else {
+                // Handle millis() rollover (occurs every ~49.7 days)
+                elapsed_ms = (UINT32_MAX - id(last_activity_ms)) + now + 1;
+              }
+              
+              const bool timeout_reached = (elapsed_ms >= DEEP_SLEEP_TIMEOUT_MS);
+              
+              if (is_idle && timeout_reached) {
+                ESP_LOGI("deep_sleep", "Entering deep sleep after %u ms of inactivity", elapsed_ms);
+                return true;
+              }
+              return false;
+          then:
+            - deep_sleep.enter: deep_sleep_control
+
 # ---------- LED feedback + session scripts ----------
 script:
   # Blink red/yellow while waiting for Home Assistant connection
@@ -239,6 +291,7 @@ script:
     mode: restart
     then:
       - lambda: 'id(ready_status_shown) = false;'
+      - lambda: 'id(last_activity_ms) = millis();'  # Reset deep sleep timer
       - while:
           condition:
             lambda: 'return !api::global_api_server->is_connected();'
@@ -365,6 +418,7 @@ script:
       - switch.turn_off: scanner_trigger
       - switch.turn_off: scanner_aim
       - lambda: 'id(session_active) = false;'
+      - lambda: 'id(last_activity_ms) = millis();'  # Reset deep sleep timer after session ends
 
 # ---------- UI button to start a session ----------
 # Keep as a proper "button" entity; add it to a Tile/Button card in HA for one-tap use.
@@ -372,6 +426,7 @@ button:
   - platform: template
     name: "Start Scan Session"
     on_press:
+      - lambda: 'id(last_activity_ms) = millis();'  # Reset deep sleep timer
       - script.stop: show_ready_status        # Stop ready status if showing
       - script.stop: ready_timeout_watchdog   # Stop ready watchdog
       - script.execute: start_scan_session
