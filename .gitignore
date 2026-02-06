@@ -1,0 +1,39 @@
+# .gitignore for HA Matrix Barcode Scanner to Shopping
+
+# ESPHome secrets file (contains WiFi passwords and API keys)
+esphome/secrets.yaml
+
+# Common Python files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ESPHome build artifacts
+esphome/.esphome/
+esphome/build/
+esphome/*.bin
+
+# Home Assistant test files
+home-assistant/secrets.yaml
+home-assistant/.storage/
+
+# Logs
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp

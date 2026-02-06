@@ -1,0 +1,30 @@
+# Configuration file for REST commands used in the barcode lookup automation
+# Add these to your Home Assistant configuration.yaml or include this file
+
+rest_command:
+  # Open Food Facts API - Food products database
+  off_lookup_product:
+    url: "https://world.openfoodfacts.org/api/v2/product/{{ barcode }}.json"
+    method: GET
+    timeout: 10
+    
+  # Open Beauty Facts API - Beauty products database
+  obf_lookup_product:
+    url: "https://world.openbeautyfacts.org/api/v2/product/{{ barcode }}.json"
+    method: GET
+    timeout: 10
+    
+  # Open Products Facts API - General products database
+  opf_lookup_product:
+    url: "https://world.openproductsfacts.org/api/v2/product/{{ barcode }}.json"
+    method: GET
+    timeout: 10
+    
+  # UPC Item DB - Alternative barcode database
+  # Note: You may need to register for an API key at https://www.upcitemdb.com/
+  upcitemdb_lookup:
+    url: "https://api.upcitemdb.com/prod/trial/lookup?upc={{ barcode }}"
+    method: GET
+    timeout: 10
+    headers:
+      Accept: "application/json"
