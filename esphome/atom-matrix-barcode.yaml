@@ -32,6 +32,7 @@ substitutions:
   rearm_success_ms: "1200"    # After accepted scan, wait before re-arming
   rearm_block_ms: "1500"      # After blocked/duplicate, wait a bit longer
   session_timeout_ms: "30000" # End session if no accepted scan for 30s
+  ready_timeout_ms: "30000"   # Show green "ready" status for 30s after HA connection
 
 esp32:
   board: m5stack-atom
@@ -41,6 +42,10 @@ logger:
   baud_rate: 0                # Disable UART0 logging (keeps pins free)
 
 api:
+  on_client_connected:
+    - script.execute: show_ready_status
+  on_client_disconnected:
+    - script.execute: show_connecting_status
 
 ota:
   - platform: esphome
@@ -99,6 +104,8 @@ binary_sensor:
       - delayed_on: 20ms     # simple debounce
       - delayed_off: 20ms
     on_press:
+      - script.stop: show_ready_status        # Stop ready status if showing
+      - script.stop: ready_timeout_watchdog   # Stop ready watchdog
       - script.execute: start_scan_session
 
 # ---------- UART to scanner ----------
@@ -124,6 +131,9 @@ globals:
     type: uint32_t
     initial_value: "0"
   - id: session_active            # True while we keep trigger/aim on
+    type: bool
+    initial_value: "false"
+  - id: ready_status_shown        # True while showing green "ready" status
     type: bool
     initial_value: "false"
 
@@ -211,6 +221,62 @@ interval:
 
 # ---------- LED feedback + session scripts ----------
 script:
+  # Blink red/yellow while waiting for Home Assistant connection
+  - id: show_connecting_status
+    mode: restart
+    then:
+      - lambda: 'id(ready_status_shown) = false;'
+      - while:
+          condition:
+            lambda: 'return !id(ready_status_shown);'
+          then:
+            # Red blink
+            - light.turn_on:
+                id: matrix_leds
+                brightness: 50%
+                red: 1.0
+                green: 0.0
+                blue: 0.0
+            - delay: 500ms
+            - light.turn_off: matrix_leds
+            - delay: 200ms
+            # Yellow blink
+            - light.turn_on:
+                id: matrix_leds
+                brightness: 50%
+                red: 1.0
+                green: 1.0
+                blue: 0.0
+            - delay: 500ms
+            - light.turn_off: matrix_leds
+            - delay: 200ms
+
+  # Show solid green when connected and ready (with timeout)
+  - id: show_ready_status
+    mode: restart
+    then:
+      - lambda: 'id(ready_status_shown) = true;'
+      - script.stop: show_connecting_status
+      - light.turn_on:
+          id: matrix_leds
+          brightness: 70%
+          red: 0.0
+          green: 1.0
+          blue: 0.0
+      - script.execute: ready_timeout_watchdog
+
+  # Watchdog to turn off ready status after timeout
+  - id: ready_timeout_watchdog
+    mode: restart
+    then:
+      - delay: ${ready_timeout_ms}ms
+      - if:
+          condition:
+            lambda: 'return id(ready_status_shown) && !id(session_active);'
+          then:
+            - lambda: 'id(ready_status_shown) = false;'
+            - light.turn_off: matrix_leds
+
   # Gentle green flash for a good read (70% brightness to protect acrylic screen)
   - id: flash_green
     mode: restart
@@ -262,6 +328,7 @@ script:
             lambda: 'return !id(session_active);'
           then:
             - lambda: 'id(session_active) = true;'
+            - lambda: 'id(ready_status_shown) = false;'  # Cancel ready status
             - switch.turn_on: scanner_aim
             - switch.turn_on: scanner_trigger
             - lambda: 'id(session_last_ms) = millis();'   # start session timer
@@ -290,4 +357,6 @@ button:
   - platform: template
     name: "Start Scan Session"
     on_press:
+      - script.stop: show_ready_status        # Stop ready status if showing
+      - script.stop: ready_timeout_watchdog   # Stop ready watchdog
       - script.execute: start_scan_session
