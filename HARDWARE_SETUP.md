@@ -72,11 +72,14 @@ The Atom Matrix automatically maps the Grove connector pins:
 
 ## Hardware Testing (After Firmware Flash)
 
-### Test 1: Basic Connectivity
+### Test 1: Connection Status
 1. Flash the ESP Home firmware
-2. Check ESPHome logs for successful boot
-3. Verify device connects to WiFi
-4. Confirm device appears in Home Assistant
+2. Watch LED matrix for status:
+   - Red/Yellow blinking = Trying to connect
+   - Solid Green = Successfully connected!
+3. Green LED stays on for 30 seconds, then turns off
+4. Check ESPHome logs for successful connection
+5. Verify device appears in Home Assistant
 
 ### Test 2: LED Matrix
 1. Press the physical button on Atom Matrix
@@ -100,6 +103,21 @@ The Atom Matrix automatically maps the Grove connector pins:
 4. Session ends after timeout (LEDs turn off)
 
 ## Troubleshooting Hardware
+
+### LED Matrix Shows Red/Yellow Blinking
+
+**This is normal during connection:**
+- Device is trying to connect to Home Assistant
+- Check WiFi credentials in secrets.yaml
+- Ensure Home Assistant is running
+- Verify WiFi signal strength
+- Check ESPHome logs for connection errors
+
+**If continuous after several minutes:**
+- Wrong WiFi password
+- Home Assistant not accessible
+- API not enabled in Home Assistant
+- Network firewall blocking connection
 
 ### Scanner Not Reading Barcodes
 

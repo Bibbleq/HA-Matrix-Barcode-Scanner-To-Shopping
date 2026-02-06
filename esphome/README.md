@@ -6,12 +6,13 @@ This directory contains the firmware configuration for the M5Stack Atom Matrix b
 
 ### `atom-matrix-barcode.yaml`
 Main ESP Home configuration file for the device. This file contains:
-- WiFi and API configuration
-- LED matrix control (5x5 RGB matrix)
+- WiFi and API configuration with connection status indicators
+- LED matrix control (5x5 RGB matrix) with visual status feedback
 - Barcode scanner UART communication
 - Session management and button control
 - Scanner configuration commands
 - Duplicate detection and cooldown logic
+- Connection status indicator (red/yellow blink → solid green)
 
 ### `secrets.yaml.example`
 Template for storing sensitive credentials. Copy this to `secrets.yaml` and fill in your:
@@ -41,6 +42,21 @@ Template for storing sensitive credentials. Copy this to `secrets.yaml` and fill
 
 ## Configuration Options
 
+### LED Status Indicators
+
+The device shows visual connection status on the LED matrix:
+
+**Connection Status:**
+- **Red/Yellow Blinking** - Waiting for Home Assistant connection
+  - Alternates red (500ms) and yellow (500ms)
+  - Continues until successfully connected
+- **Solid Green (30s)** - Connected and ready to scan
+  - Shows after successful connection
+  - Auto-turns off after 30 seconds
+  - Press button to start scanning (cancels timeout)
+- **Green Flash (120ms)** - Successful barcode scan
+- **Red Flash (80ms)** - Duplicate or cooldown block
+
 ### Timing Adjustments
 
 Edit the `substitutions` section in `atom-matrix-barcode.yaml`:
@@ -51,6 +67,7 @@ substitutions:
   rearm_success_ms: "1200"    # Delay after successful scan
   rearm_block_ms: "1500"      # Delay after duplicate/blocked
   session_timeout_ms: "30000" # Session auto-end timeout (30 seconds)
+  ready_timeout_ms: "30000"   # Ready status display timeout (30 seconds)
 ```
 
 ### LED Brightness
@@ -101,6 +118,14 @@ The device automatically configures the scanner module on boot:
 4. **Initialize control pins:** Set trigger and aim to idle state
 
 ## Troubleshooting
+
+### LEDs continuously blinking red/yellow
+- Device cannot connect to Home Assistant
+- Verify `secrets.yaml` credentials are correct
+- Ensure 2.4GHz WiFi network (ESP32 doesn't support 5GHz)
+- Check WiFi signal strength at device location
+- Verify Home Assistant is running and accessible
+- Check ESPHome API is enabled in Home Assistant
 
 ### Device not connecting to WiFi
 - Verify `secrets.yaml` credentials

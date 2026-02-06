@@ -67,11 +67,16 @@ Get your barcode scanner running in 15 minutes!
 
 ## First Scan Test
 
-1. **Press the button** on Atom Matrix
+1. **Watch the LED matrix:**
+   - Red/yellow blinking = connecting to Home Assistant
+   - Solid green = connected and ready!
+   - Green disappears after 30 seconds (power saving)
+
+2. **Press the button** on Atom Matrix
    - LEDs should light up
    - Scanner aiming light turns on
 
-2. **Scan a product barcode:**
+3. **Scan a product barcode:**
    - Point at barcode (5-15cm away)
    - Wait for beep
    - Green LED flash = success!
@@ -85,6 +90,9 @@ Get your barcode scanner running in 15 minutes!
 
 ## Common First-Time Issues
 
+### LEDs blinking red/yellow continuously
+**Solution:** Device can't connect to HA - check WiFi credentials and ensure HA is running
+
 ### Device won't flash
 **Solution:** Hold button while plugging in USB cable
 
@@ -92,7 +100,7 @@ Get your barcode scanner running in 15 minutes!
 **Solution:** Check ESPHome logs, verify WiFi credentials
 
 ### Barcode doesn't scan
-**Solution:** Press button first to start session, then scan
+**Solution:** Watch for solid green LED first (connected), then press button to start session
 
 ### Item not added to list
 **Solution:** Check automation entity IDs match your setup
@@ -106,6 +114,7 @@ Get your barcode scanner running in 15 minutes!
 
 ## Tips for Best Results
 
+- **Watch the LED status** - Red/yellow = not ready, green = ready to use
 - **Start session first** - Press button before scanning
 - **Hold steady** - Keep scanner perpendicular to barcode
 - **Optimal distance** - 5-15cm (2-6 inches) from barcode

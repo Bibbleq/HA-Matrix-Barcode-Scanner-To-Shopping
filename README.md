@@ -8,7 +8,11 @@ A complete Home Assistant integration for scanning barcodes and automatically ad
 ## 🎯 Features
 
 - **Physical barcode scanner** built with M5Stack Atom Matrix and barcode scanner module
-- **Visual feedback** via 5x5 LED matrix (green for success, red for duplicates)
+- **Connection status indicator** - Visual feedback on LED matrix:
+  - Red/yellow blinking: Waiting for Home Assistant connection
+  - Solid green (30s): Connected and ready to scan
+  - Green flash: Successful barcode scan
+  - Red flash: Duplicate/too quick scan
 - **Session-based scanning** with auto-timeout (press button once, scan multiple items)
 - **Intelligent product lookup** cascading through multiple databases:
   - Open Food Facts (food products)
@@ -112,6 +116,22 @@ The barcode scanner connects to the Atom Matrix via Grove port:
 
 ## 📖 Usage
 
+### Device Startup and Connection
+
+When the device powers on or is unplugged and reconnected:
+
+1. **Blinking Red/Yellow** - Device is booting or waiting for Home Assistant connection
+   - Red blink (500ms) → Yellow blink (500ms) → repeat
+   - Continues until successfully connected to Home Assistant
+
+2. **Solid Green (30 seconds)** - Connected and ready to scan
+   - Shows for 30 seconds after connection established
+   - Automatically turns off after timeout
+   - Press button to start scanning (cancels ready timeout)
+
+3. **Idle (LEDs off)** - Normal standby state
+   - Ready to start a scan session when button is pressed
+
 ### Starting a Scan Session
 
 **Method 1: Physical Button**
@@ -158,7 +178,7 @@ The barcode scanner connects to the Atom Matrix via Grove port:
 
 ## ⚙️ Configuration
 
-### ESP Home Configuration Tuning
+### Configuration Tuning
 
 Edit `esphome/atom-matrix-barcode.yaml` substitutions:
 
@@ -168,6 +188,7 @@ substitutions:
   rearm_success_ms: "1200"    # Re-arm delay after successful scan
   rearm_block_ms: "1500"      # Re-arm delay after duplicate/blocked
   session_timeout_ms: "30000" # Session timeout (30 seconds)
+  ready_timeout_ms: "30000"   # Ready indicator timeout (30 seconds)
 ```
 
 ### Scanner Hardware Configuration
@@ -199,6 +220,8 @@ Update line 216: `entity_id: todo.shopping` to your list entity.
 - Ensure drivers are installed for ESP32
 
 **Scanner not working:**
+- Check if LEDs are showing status (red/yellow blinking = not connected)
+- Green LED means connected - press button to start scanning
 - Check UART connections (GPIO22 RX, GPIO19 TX)
 - Review logs in ESPHome: set `logger: level: DEBUG`
 - Verify scanner power (check Grove connector)
@@ -232,6 +255,12 @@ Update line 216: `entity_id: todo.shopping` to your list entity.
 - Review automation traces for errors
 
 ### LED Feedback Issues
+
+**LEDs continuously blinking red/yellow:**
+- Device cannot connect to Home Assistant
+- Check WiFi credentials in `secrets.yaml`
+- Verify Home Assistant API is accessible
+- Check ESPHome logs for connection errors
 
 **LEDs too bright:**
 Edit brightness in the YAML (default is 70%):
